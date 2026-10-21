@@ -23,19 +23,12 @@ jobs:
         sudo apt-get install -y \
           git zip unzip openjdk-17-jdk autoconf libtool pkg-config \
           zlib1g-dev libncurses5-dev libncursesw5-dev cmake \
-          libffi-dev libssl-dev
+          libffi-dev libssl-dev build-essential
 
     - name: Install Buildozer and Cython
       run: |
         pip install --upgrade pip
         pip install cython==0.29.36 buildozer
-
-    - name: Pre-create Android SDK licenses
-      run: |
-        mkdir -p /home/runner/.buildozer/android/platform/android-sdk/licenses
-        echo "24333f1a43ef661efa21158a8a9b7c7d86d29663" > /home/runner/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
-        echo "d56f5187479451eabf01fb78af6dfcb139a648b0" >> /home/runner/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
-        echo "84831b4039cb421c4426ea894a4c489c72e9092d" >> /home/runner/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
 
     - name: Build with Buildozer
       run: |
