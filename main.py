@@ -148,19 +148,19 @@ class GoldenPulseApp(App):
         return self.root_box
 
     def add_label(self, parent, text, height=34, color=WHITE, size=15):
-    parent.add_widget(
-        Label(
-            text=text,
-            size_hint_y=None,
-            height=dp(height),
-            color=color,
-            halign="right",
-            valign="middle",
-            text_size=(Window.width - dp(40), None),
-            font_size=f"{size}sp",
-            font_name=ARABIC_FONT
+        parent.add_widget(
+            Label(
+                text=text,
+                size_hint_y=None,
+                height=dp(height),
+                color=color,
+                halign="right",
+                valign="middle",
+                text_size=(Window.width - dp(40), None),
+                font_size=f"{size}sp",
+                font_name=ARABIC_FONT
+            )
         )
-    )
 
     def show_screen(self, name):
         self.content.clear_widgets()
