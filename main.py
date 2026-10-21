@@ -122,6 +122,7 @@ class Field(TextInput):
             font_name=ARABIC_FONT,
             **kwargs
         )
+
 class GoldenPulseApp(App):
     def build(self):
         self.title = "Golden Pulse - بئر علي حسين"
@@ -130,7 +131,7 @@ class GoldenPulseApp(App):
         self.root_box = BoxLayout(orientation="vertical", spacing=dp(8), padding=dp(10))
         self.header = Label(text="[b]بئر علي حسين[/b]\n[color=gold]GOLDEN PULSE[/color]",
                             markup=True, font_size="22sp", size_hint_y=None, height=dp(65),
-                            color=WHITE)
+                            color=WHITE, font_name=ARABIC_FONT)
         self.root_box.add_widget(self.header)
         self.nav = GridLayout(cols=3, spacing=dp(5), size_hint_y=None, height=dp(92))
         for label, screen in [
@@ -138,7 +139,7 @@ class GoldenPulseApp(App):
             ("سداد دين", "debt"), ("التقارير", "reports"), ("السجلات", "records")
         ]:
             b = Button(text=label, background_normal="", background_color=GOLD, color=NAVY,
-                       font_size="15sp")
+                       font_size="15sp", font_name=ARABIC_FONT)
             b.bind(on_release=lambda inst, s=screen: self.show_screen(s))
             self.nav.add_widget(b)
         self.root_box.add_widget(self.nav)
@@ -193,7 +194,8 @@ class GoldenPulseApp(App):
 
     def add_spinner(self, form, values, key, fields, default=None):
         w = Spinner(text=default or values[0], values=values, size_hint_y=None, height=dp(44),
-                    background_normal="", background_color=PANEL, color=WHITE)
+                    background_normal="", background_color=PANEL, color=WHITE,
+                    font_name=ARABIC_FONT)
         fields[key] = w
         form.add_widget(w)
         return w
@@ -201,15 +203,16 @@ class GoldenPulseApp(App):
     def save_button(self, form, label, callback):
         b = Button(text=label, size_hint_y=None, height=dp(48),
                    background_normal="", background_color=GOLD, color=NAVY,
-                   font_size="17sp")
+                   font_size="17sp", font_name=ARABIC_FONT)
         b.bind(on_release=callback)
         form.add_widget(b)
 
     def notify(self, message):
         box = BoxLayout(orientation="vertical", padding=dp(12), spacing=dp(12))
-        box.add_widget(Label(text=message, color=NAVY))
+        box.add_widget(Label(text=message, color=NAVY, font_name=ARABIC_FONT))
         close = Button(text="حسنًا", size_hint_y=None, height=dp(42),
-                       background_normal="", background_color=GOLD, color=NAVY)
+                       background_normal="", background_color=GOLD, color=NAVY,
+                       font_name=ARABIC_FONT)
         box.add_widget(close)
         pop = Popup(title="Golden Pulse", content=box, size_hint=(.85, .32))
         close.bind(on_release=pop.dismiss)
@@ -227,7 +230,7 @@ class GoldenPulseApp(App):
         self.add_field(form, "الكمية", "qty", f, "1")
         self.add_field(form, "سعر الوحدة / التعبئة", "price", f, "0")
         self.add_field(form, "الخصم", "discount", f, "0")
-        total_label = Label(text="الإجمالي: 0", size_hint_y=None, height=dp(34), color=GOLD, font_size="18sp")
+        total_label = Label(text="الإجمالي: 0", size_hint_y=None, height=dp(34), color=GOLD, font_size="18sp", font_name=ARABIC_FONT)
         form.add_widget(total_label)
         def calc(*_):
             try: total_label.text = "الإجمالي: " + str(max(0, float(f["qty"].text or 0)*float(f["price"].text or 0)-float(f["discount"].text or 0)))
