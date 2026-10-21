@@ -114,16 +114,14 @@ class Store:
 class Field(TextInput):
     def __init__(self, hint, **kwargs):
         super().__init__(
-        hint_text=hint,
-        multiline=False,
-        size_hint_y=None,
-        height=dp(44),
-        padding=(dp(10),    
-    dp(10)),
-        font_name=ARABIC_FONT,
-        **kwargs
-    )
-
+            hint_text=hint,
+            multiline=False,
+            size_hint_y=None,
+            height=dp(44),
+            padding=(dp(10), dp(10)),
+            font_name=ARABIC_FONT,
+            **kwargs
+        )
 class GoldenPulseApp(App):
     def build(self):
         self.title = "Golden Pulse - بئر علي حسين"
