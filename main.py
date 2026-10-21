@@ -15,6 +15,20 @@ from kivy.uix.button import Button
 from kivy.uix.textinput import TextInput
 from kivy.uix.spinner import Spinner
 from kivy.uix.popup import Popup
+from kivy.core.text import LabelBase
+from kivy.resources import resource_add_path
+# Golden Pulse Arabic font
+FONT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         "GoldenPulseUI-Regular.ttf")
+
+if os.path.exists(FONT_PATH):
+    LabelBase.register(
+        name="GoldenPulseArabic",
+        fn_regular=FONT_PATH
+    )
+    ARABIC_FONT = "GoldenPulseArabic"
+else:
+    ARABIC_FONT = "Roboto"
 
 NAVY = (15/255, 23/255, 42/255, 1)
 PANEL = (30/255, 41/255, 59/255, 1)
