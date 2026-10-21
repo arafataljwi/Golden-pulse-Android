@@ -36,6 +36,9 @@ android.minapi = 21
 # (str) Android NDK version to use
 android.ndk_version = 25b
 
+# (str) Android build tools version
+android.build_tools_version = 33.0.2
+
 # (list) Application permissions
 android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
 
