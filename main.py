@@ -1,12 +1,17 @@
-# Golden Pulse Android - starter port from the Windows Tkinter app
-# Client branding: بئر علي حسين
-# Built with Kivy + SQLite; no Tkinter dependencies.
+# Golden Pulse Android - updated Kivy + SQLite app
+# Client: بئر علي حسين
+# Arabic shaping uses arabic-reshaper + python-bidi when available.
+# Default login: admin / 112233 (change before production use).
 
-import os, sqlite3, uuid
+import os
+import sqlite3
+import uuid
 from datetime import datetime
+
 from kivy.app import App
 from kivy.metrics import dp
 from kivy.core.window import Window
+from kivy.core.text import LabelBase
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.scrollview import ScrollView
@@ -15,20 +20,19 @@ from kivy.uix.button import Button
 from kivy.uix.textinput import TextInput
 from kivy.uix.spinner import Spinner
 from kivy.uix.popup import Popup
-from kivy.core.text import LabelBase
-from kivy.resources import resource_add_path
-# Golden Pulse Arabic font
-FONT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                         "GoldenPulseUI-Regular.ttf")
 
-if os.path.exists(FONT_PATH):
-    LabelBase.register(
-        name="GoldenPulseArabic",
-        fn_regular=FONT_PATH
-    )
-    ARABIC_FONT = "GoldenPulseArabic"
-else:
-    ARABIC_FONT = "Roboto"
+try:
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+    def ar_text(value):
+        value = str(value)
+        try:
+            return get_display(arabic_reshaper.reshape(value))
+        except Exception:
+            return value
+except Exception:
+    def ar_text(value):
+        return str(value)
 
 NAVY = (15/255, 23/255, 42/255, 1)
 PANEL = (30/255, 41/255, 59/255, 1)
@@ -36,9 +40,24 @@ GOLD = (212/255, 175/255, 55/255, 1)
 WHITE = (1, 1, 1, 1)
 MUTED = (0.75, 0.80, 0.87, 1)
 
+APP_FONT = "Roboto"
+FONT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "GoldenPulseUI-Regular.ttf")
+if os.path.exists(FONT_PATH):
+    try:
+        LabelBase.register(name="GoldenPulseArabic", fn_regular=FONT_PATH)
+        APP_FONT = "GoldenPulseArabic"
+    except Exception:
+        pass
+
 def now_parts():
     d = datetime.now()
     return d.strftime("%Y-%m-%d"), d.strftime("%H:%M:%S")
+
+def money(value):
+    try:
+        return f"{float(value):,.2f}".rstrip("0").rstrip(".")
+    except Exception:
+        return str(value)
 
 class Store:
     def __init__(self, path):
@@ -73,17 +92,22 @@ class Store:
             cols = {r[1] for r in c.execute("PRAGMA table_info(sales)").fetchall()}
             if "owner" not in cols:
                 c.execute("ALTER TABLE sales ADD COLUMN owner TEXT DEFAULT ''")
+            if "phone" not in cols:
+                c.execute("ALTER TABLE sales ADD COLUMN phone TEXT DEFAULT ''")
 
     def add_sale(self, d):
+        # Keep legacy customer column populated for compatibility with older DB versions.
         with self.connect() as c:
             c.execute("""INSERT INTO sales
             (id,no,date,time,customer,owner,phone,size,pay,currency,qty,price,discount,total)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (str(uuid.uuid4()), d["no"], d["date"], d["time"], d["customer"], d["owner"],
+            (str(uuid.uuid4()), d["no"], d["date"], d["time"], d["owner"], d["owner"],
              d["phone"], d["size"], d["pay"], d["currency"], d["qty"], d["price"],
              d["discount"], d["total"]))
 
     def add_voucher(self, table, d):
+        if table not in ("pay", "rec"):
+            raise ValueError("Invalid voucher type")
         with self.connect() as c:
             c.execute(f"INSERT INTO {table} VALUES (?,?,?,?,?,?,?,?)",
                       (str(uuid.uuid4()), d["no"], d["date"], d["name"], d["amount"],
@@ -94,10 +118,12 @@ class Store:
             c.execute("""INSERT INTO debt_payments
             (id,no,date,time,customer,phone,amount,currency,method,note)
             VALUES (?,?,?,?,?,?,?,?,?,?)""",
-            (str(uuid.uuid4()),d["no"],d["date"],d["time"],d["customer"],d["phone"],
-             d["amount"],d["currency"],d["method"],d["note"]))
+            (str(uuid.uuid4()), d["no"], d["date"], d["time"], d["customer"], d["phone"],
+             d["amount"], d["currency"], d["method"], d["note"]))
 
     def rows(self, table):
+        if table not in ("sales", "pay", "rec", "debt_payments"):
+            raise ValueError("Invalid table")
         with self.connect() as c:
             c.row_factory = sqlite3.Row
             return [dict(r) for r in c.execute(f"SELECT * FROM {table} ORDER BY date DESC").fetchall()]
@@ -114,12 +140,15 @@ class Store:
 class Field(TextInput):
     def __init__(self, hint, **kwargs):
         super().__init__(
-            hint_text=hint,
+            hint_text=ar_text(hint),
             multiline=False,
             size_hint_y=None,
-            height=dp(44),
+            height=dp(46),
             padding=(dp(10), dp(10)),
-            font_name=ARABIC_FONT,
+            font_name=APP_FONT,
+            font_size="16sp",
+            halign="right",
+            foreground_color=NAVY,
             **kwargs
         )
 
@@ -129,39 +158,63 @@ class GoldenPulseApp(App):
         Window.clearcolor = NAVY
         self.store = Store(os.path.join(self.user_data_dir, "golden_pulse.db"))
         self.root_box = BoxLayout(orientation="vertical", spacing=dp(8), padding=dp(10))
-        self.header = Label(text="[b]بئر علي حسين[/b]\n[color=gold]GOLDEN PULSE[/color]",
-                            markup=True, font_size="22sp", size_hint_y=None, height=dp(65),
-                            color=WHITE, font_name=ARABIC_FONT)
+        self.show_login()
+        return self.root_box
+
+    def make_label(self, text, height=38, color=WHITE, size=15, markup=False):
+        return Label(
+            text=ar_text(text), markup=markup, size_hint_y=None, height=dp(height),
+            color=color, halign="right", valign="middle",
+            text_size=(Window.width-dp(40), None), font_size=f"{size}sp",
+            font_name=APP_FONT
+        )
+
+    def make_button(self, text, callback, height=48, font_size=16):
+        b = Button(text=ar_text(text), size_hint_y=None, height=dp(height),
+                   background_normal="", background_color=GOLD, color=NAVY,
+                   font_size=f"{font_size}sp", font_name=APP_FONT)
+        b.bind(on_release=callback)
+        return b
+
+    def show_login(self):
+        self.root_box.clear_widgets()
+        self.root_box.add_widget(self.make_label("بئر علي حسين", 54, GOLD, 27))
+        self.root_box.add_widget(self.make_label("GOLDEN PULSE", 36, WHITE, 22))
+        self.root_box.add_widget(self.make_label("تسجيل الدخول", 48, GOLD, 20))
+        form = BoxLayout(orientation="vertical", spacing=dp(12), padding=(dp(12), dp(12)))
+        self.login_user = Field("اسم المستخدم")
+        self.login_pass = Field("كلمة المرور", password=True)
+        form.add_widget(self.login_user)
+        form.add_widget(self.login_pass)
+        form.add_widget(self.make_button("دخول", self.login, 50, 18))
+        self.root_box.add_widget(form)
+        self.root_box.add_widget(self.make_label("للدخول الأول: admin / 112233", 36, MUTED, 12))
+
+    def login(self, *_):
+        # Initial prototype credentials. Replace with managed credentials before production.
+        if self.login_user.text.strip() == "admin" and self.login_pass.text == "112233":
+            self.show_dashboard()
+        else:
+            self.notify("اسم المستخدم أو كلمة المرور غير صحيحة")
+
+    def show_dashboard(self):
+        self.root_box.clear_widgets()
+        self.header = self.make_label("بئر علي حسين  |  GOLDEN PULSE", 52, GOLD, 21)
         self.root_box.add_widget(self.header)
-        self.nav = GridLayout(cols=3, spacing=dp(5), size_hint_y=None, height=dp(92))
+        self.nav = GridLayout(cols=3, spacing=dp(5), size_hint_y=None, height=dp(100))
         for label, screen in [
             ("المبيعات", "sales"), ("سند قبض", "rec"), ("سند صرف", "pay"),
             ("سداد دين", "debt"), ("التقارير", "reports"), ("السجلات", "records")
         ]:
-            b = Button(text=label, background_normal="", background_color=GOLD, color=NAVY,
-                       font_size="15sp", font_name=ARABIC_FONT)
-            b.bind(on_release=lambda inst, s=screen: self.show_screen(s))
+            b = self.make_button(label, lambda inst, s=screen: self.show_screen(s), 46, 14)
             self.nav.add_widget(b)
         self.root_box.add_widget(self.nav)
         self.content = BoxLayout(orientation="vertical", spacing=dp(8))
         self.root_box.add_widget(self.content)
         self.show_screen("sales")
-        return self.root_box
 
     def add_label(self, parent, text, height=34, color=WHITE, size=15):
-        parent.add_widget(
-            Label(
-                text=text,
-                size_hint_y=None,
-                height=dp(height),
-                color=color,
-                halign="right",
-                valign="middle",
-                text_size=(Window.width - dp(40), None),
-                font_size=f"{size}sp",
-                font_name=ARABIC_FONT
-            )
-        )
+        parent.add_widget(self.make_label(text, height, color, size))
 
     def show_screen(self, name):
         self.content.clear_widgets()
@@ -177,7 +230,7 @@ class GoldenPulseApp(App):
             self.records_screen()
 
     def form_shell(self, title):
-        self.add_label(self.content, title, height=38, color=GOLD, size=20)
+        self.add_label(self.content, title, height=40, color=GOLD, size=20)
         scroll = ScrollView()
         form = BoxLayout(orientation="vertical", spacing=dp(7), padding=(dp(3), dp(4)),
                          size_hint_y=None)
@@ -193,36 +246,30 @@ class GoldenPulseApp(App):
         return widget
 
     def add_spinner(self, form, values, key, fields, default=None):
-        w = Spinner(text=default or values[0], values=values, size_hint_y=None, height=dp(44),
+        vals = [ar_text(v) for v in values]
+        w = Spinner(text=ar_text(default or values[0]), values=vals, size_hint_y=None, height=dp(46),
                     background_normal="", background_color=PANEL, color=WHITE,
-                    font_name=ARABIC_FONT)
+                    font_name=APP_FONT, font_size="16sp")
         fields[key] = w
         form.add_widget(w)
         return w
 
     def save_button(self, form, label, callback):
-        b = Button(text=label, size_hint_y=None, height=dp(48),
-                   background_normal="", background_color=GOLD, color=NAVY,
-                   font_size="17sp", font_name=ARABIC_FONT)
-        b.bind(on_release=callback)
-        form.add_widget(b)
+        form.add_widget(self.make_button(label, callback, 50, 17))
 
     def notify(self, message):
         box = BoxLayout(orientation="vertical", padding=dp(12), spacing=dp(12))
-        box.add_widget(Label(text=message, color=NAVY, font_name=ARABIC_FONT))
-        close = Button(text="حسنًا", size_hint_y=None, height=dp(42),
-                       background_normal="", background_color=GOLD, color=NAVY,
-                       font_name=ARABIC_FONT)
+        box.add_widget(self.make_label(message, 70, NAVY, 15))
+        close = self.make_button("حسنًا", lambda *_: pop.dismiss(), 42)
         box.add_widget(close)
-        pop = Popup(title="Golden Pulse", content=box, size_hint=(.85, .32))
+        pop = Popup(title="Golden Pulse", content=box, size_hint=(.88, .42))
         close.bind(on_release=pop.dismiss)
         pop.open()
 
     def sales_screen(self):
         form = self.form_shell("فاتورة تعبئة مياه")
         f = {}
-        self.add_field(form, "اسم العميل", "customer", f)
-        self.add_field(form, "اسم صاحب الوايت (اختياري)", "owner", f)
+        self.add_field(form, "اسم صاحب الوايت", "owner", f)
         self.add_field(form, "رقم الهاتف", "phone", f)
         self.add_spinner(form, [str(x) for x in range(2000, 20001, 2000)], "size", f, "10000")
         self.add_spinner(form, ["نقدي", "آجل"], "pay", f, "نقدي")
@@ -230,29 +277,93 @@ class GoldenPulseApp(App):
         self.add_field(form, "الكمية", "qty", f, "1")
         self.add_field(form, "سعر الوحدة / التعبئة", "price", f, "0")
         self.add_field(form, "الخصم", "discount", f, "0")
-        total_label = Label(text="الإجمالي: 0", size_hint_y=None, height=dp(34), color=GOLD, font_size="18sp", font_name=ARABIC_FONT)
+        total_label = self.make_label("الإجمالي: 0", 38, GOLD, 18)
         form.add_widget(total_label)
+
         def calc(*_):
-            try: total_label.text = "الإجمالي: " + str(max(0, float(f["qty"].text or 0)*float(f["price"].text or 0)-float(f["discount"].text or 0)))
-            except ValueError: total_label.text = "الإجمالي: —"
-        for k in ("qty", "price", "discount"): f[k].bind(text=calc)
+            try:
+                total = max(0, float(f["qty"].text or 0) * float(f["price"].text or 0) - float(f["discount"].text or 0))
+                total_label.text = ar_text("الإجمالي: " + money(total))
+            except ValueError:
+                total_label.text = ar_text("الإجمالي: —")
+        for k in ("qty", "price", "discount"):
+            f[k].bind(text=calc)
+
         def save(_):
             try:
-                customer = f["customer"].text.strip()
-                if not customer: raise ValueError("أدخل اسم العميل.")
-                qty, price, discount = float(f["qty"].text or 0), float(f["price"].text or 0), float(f["discount"].text or 0)
-                if qty <= 0 or price < 0 or discount < 0: raise ValueError("تحقق من الكمية والسعر والخصم.")
+                owner = f["owner"].text.strip()
+                if not owner:
+                    raise ValueError("أدخل اسم صاحب الوايت.")
+                qty = float(f["qty"].text or 0)
+                price = float(f["price"].text or 0)
+                discount = float(f["discount"].text or 0)
+                if qty <= 0 or price < 0 or discount < 0:
+                    raise ValueError("تحقق من الكمية والسعر والخصم.")
                 date, tm = now_parts()
                 number = "INV-" + datetime.now().strftime("%y%m%d%H%M%S")
-                total = max(0, qty*price-discount)
-                self.store.add_sale(dict(no=number,date=date,time=tm,customer=customer,
-                    owner=f["owner"].text.strip(),phone=f["phone"].text.strip(),size=f["size"].text,
-                    pay=f["pay"].text,currency=f["currency"].text,qty=qty,price=price,
-                    discount=discount,total=total))
-                self.notify(f"تم حفظ الفاتورة {number}\nالإجمالي: {total:g} {f['currency'].text}")
-                self.show_screen("sales")
-            except (ValueError, sqlite3.Error) as e: self.notify(str(e))
-        self.save_button(form, "حفظ الفاتورة", save)
+                total = max(0, qty * price - discount)
+                data = dict(no=number, date=date, time=tm, owner=owner,
+                            phone=f["phone"].text.strip(), size=f["size"].text,
+                            pay=f["pay"].text, currency=f["currency"].text,
+                            qty=qty, price=price, discount=discount, total=total)
+                self.store.add_sale(data)
+                self.show_invoice(data)
+            except (ValueError, sqlite3.Error) as e:
+                self.notify(str(e))
+        self.save_button(form, "حفظ الفاتورة وعرضها", save)
+
+    def invoice_text(self, d):
+        return (
+            "بئر علي حسين\n"
+            "GOLDEN PULSE\n"
+            "فاتورة تعبئة مياه\n"
+            "--------------------------------\n"
+            f"رقم الفاتورة: {d['no']}\n"
+            f"التاريخ: {d['date']}  {d['time']}\n"
+            f"اسم صاحب الوايت: {d['owner']}\n"
+            f"رقم الهاتف: {d['phone'] or '-'}\n"
+            f"حجم الوايت: {d['size']} لتر\n"
+            f"نوع الدفع: {d['pay']}\n"
+            f"الكمية: {d['qty']:g}\n"
+            f"سعر الوحدة: {money(d['price'])}\n"
+            f"الخصم: {money(d['discount'])}\n"
+            "--------------------------------\n"
+            f"الإجمالي: {money(d['total'])} {d['currency']}\n"
+            "شكرًا لتعاملكم معنا"
+        )
+
+    def show_invoice(self, d):
+        box = BoxLayout(orientation="vertical", spacing=dp(8), padding=dp(10))
+        inv = Label(text=ar_text(self.invoice_text(d)), color=NAVY, font_name=APP_FONT,
+                    font_size="15sp", halign="right", valign="middle",
+                    text_size=(Window.width*0.76, None))
+        box.add_widget(inv)
+        actions = GridLayout(cols=2, spacing=dp(6), size_hint_y=None, height=dp(48))
+        pop = Popup(title="فاتورة بئر علي حسين", content=box, size_hint=(.95, .85))
+        print_btn = self.make_button("طباعة / مشاركة", lambda *_: self.share_invoice(d), 46, 13)
+        close_btn = self.make_button("إغلاق", lambda *_: pop.dismiss(), 46, 13)
+        actions.add_widget(print_btn)
+        actions.add_widget(close_btn)
+        box.add_widget(actions)
+        pop.open()
+
+    def share_invoice(self, d):
+        text = self.invoice_text(d)
+        try:
+            from jnius import autoclass
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            Intent = autoclass("android.content.Intent")
+            String = autoclass("java.lang.String")
+            activity = PythonActivity.mActivity
+            intent = Intent()
+            intent.setAction(Intent.ACTION_SEND)
+            intent.setType("text/plain")
+            intent.putExtra(Intent.EXTRA_TEXT, String(text))
+            chooser = Intent.createChooser(intent, String("طباعة أو مشاركة الفاتورة"))
+            activity.startActivity(chooser)
+            self.notify("اختر تطبيق الطباعة أو المشاركة من القائمة التي ظهرت.")
+        except Exception:
+            self.notify("تعذّر فتح قائمة الطباعة تلقائيًا. يمكنك استخدام مشاركة الفاتورة من نظام أندرويد بعد تفعيل تطبيق الطابعة.")
 
     def voucher_screen(self, table):
         title = "سند قبض" if table == "rec" else "سند صرف"
@@ -268,15 +379,18 @@ class GoldenPulseApp(App):
             try:
                 name = f["name"].text.strip()
                 amount = float(f["amount"].text or 0)
-                if not name: raise ValueError("أدخل الاسم.")
-                if amount <= 0: raise ValueError("يجب أن يكون المبلغ أكبر من صفر.")
+                if not name:
+                    raise ValueError("أدخل الاسم.")
+                if amount <= 0:
+                    raise ValueError("يجب أن يكون المبلغ أكبر من صفر.")
                 date, _ = now_parts()
                 no = prefix + datetime.now().strftime("%y%m%d%H%M%S")
-                self.store.add_voucher(table, dict(no=no,date=date,name=name,amount=amount,
-                    currency=f["currency"].text,method=f["method"].text,note=f["note"].text.strip()))
+                self.store.add_voucher(table, dict(no=no, date=date, name=name, amount=amount,
+                    currency=f["currency"].text, method=f["method"].text, note=f["note"].text.strip()))
                 self.notify(f"تم حفظ {title} رقم {no}")
                 self.show_screen(table)
-            except (ValueError, sqlite3.Error) as e: self.notify(str(e))
+            except (ValueError, sqlite3.Error) as e:
+                self.notify(str(e))
         self.save_button(form, "حفظ " + title, save)
 
     def debt_screen(self):
@@ -292,39 +406,44 @@ class GoldenPulseApp(App):
             try:
                 customer = f["customer"].text.strip()
                 amount = float(f["amount"].text or 0)
-                if not customer: raise ValueError("أدخل اسم العميل.")
-                if amount <= 0: raise ValueError("أدخل مبلغًا أكبر من صفر.")
+                if not customer:
+                    raise ValueError("أدخل الاسم.")
+                if amount <= 0:
+                    raise ValueError("أدخل مبلغًا أكبر من صفر.")
                 date, tm = now_parts()
                 no = "DPM-" + datetime.now().strftime("%y%m%d%H%M%S")
-                self.store.add_debt_payment(dict(no=no,date=date,time=tm,customer=customer,
-                    phone=f["phone"].text.strip(),amount=amount,currency=f["currency"].text,
-                    method=f["method"].text,note=f["note"].text.strip()))
+                self.store.add_debt_payment(dict(no=no, date=date, time=tm, customer=customer,
+                    phone=f["phone"].text.strip(), amount=amount, currency=f["currency"].text,
+                    method=f["method"].text, note=f["note"].text.strip()))
                 self.notify("تم تسجيل سداد الدين " + no)
                 self.show_screen("debt")
-            except (ValueError, sqlite3.Error) as e: self.notify(str(e))
+            except (ValueError, sqlite3.Error) as e:
+                self.notify(str(e))
         self.save_button(form, "حفظ سداد الدين", save)
 
     def reports_screen(self):
         form = self.form_shell("التقارير والملخص")
         sales, count, rec, pay, debt_paid = self.store.summary()
         self.add_label(form, f"عدد فواتير المبيعات: {count}", height=42, size=17)
-        self.add_label(form, f"إجمالي المبيعات: {sales:g}", height=42, color=GOLD, size=17)
-        self.add_label(form, f"إجمالي سندات القبض: {rec:g}", height=42, size=17)
-        self.add_label(form, f"إجمالي سندات الصرف: {pay:g}", height=42, size=17)
-        self.add_label(form, f"إجمالي سداد الديون المسجل: {debt_paid:g}", height=42, size=17)
-        self.add_label(form, "تنبيه: الإجماليات هنا تجمع العملات معًا؛ لا تستخدمها كرصيد محاسبي موحد عند تعدد العملات.", height=62, color=MUTED, size=12)
+        self.add_label(form, f"إجمالي المبيعات: {money(sales)}", height=42, color=GOLD, size=17)
+        self.add_label(form, f"إجمالي سندات القبض: {money(rec)}", height=42, size=17)
+        self.add_label(form, f"إجمالي سندات الصرف: {money(pay)}", height=42, size=17)
+        self.add_label(form, f"إجمالي سداد الديون المسجل: {money(debt_paid)}", height=42, size=17)
+        self.add_label(form, "تنبيه: الإجماليات تجمع العملات معًا؛ لا تستخدمها كرصيد موحد عند تعدد العملات.",
+                       height=68, color=MUTED, size=12)
 
     def records_screen(self):
         form = self.form_shell("آخر السجلات")
-        for table, title in [("sales","المبيعات"),("rec","سندات القبض"),("pay","سندات الصرف"),("debt_payments","سداد الديون")]:
+        for table, title in [("sales", "المبيعات"), ("rec", "سندات القبض"),
+                             ("pay", "سندات الصرف"), ("debt_payments", "سداد الديون")]:
             rows = self.store.rows(table)
             self.add_label(form, f"— {title}: {len(rows)} سجل —", height=38, color=GOLD, size=17)
             for row in rows[:15]:
-                name = row.get("customer") or row.get("name") or "—"
+                name = row.get("owner") or row.get("customer") or row.get("name") or "—"
                 amount = row.get("total", row.get("amount", 0))
                 no = row.get("no", "")
                 date = row.get("date", "")
-                self.add_label(form, f"{date} | {no} | {name} | {amount}", height=42, color=WHITE, size=12)
+                self.add_label(form, f"{date} | {no} | {name} | {money(amount)}", height=44, color=WHITE, size=12)
 
 if __name__ == "__main__":
     GoldenPulseApp().run()
