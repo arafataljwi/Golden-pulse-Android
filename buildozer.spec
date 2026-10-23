@@ -4,11 +4,10 @@ package.name = goldenpulse
 package.domain = org.goldenpulse
 source.dir = .
 source.include_exts = py,png,jpg,jpeg,kv,atlas,ttf,txt,db
-version = 0.1.0
-requirements = python3,kivy
+version = 0.2.0
+requirements = python3,kivy,arabic-reshaper,python-bidi
 orientation = portrait
 fullscreen = 0
-
 android.api = 33
 android.minapi = 21
 android.ndk = 25b
