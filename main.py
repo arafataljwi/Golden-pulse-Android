@@ -1,11 +1,11 @@
-# Golden Pulse Android - updated Kivy + SQLite app
+# Golden Pulse Android - Professional Edition
 # Client: بئر علي حسين
 # Arabic shaping uses arabic-reshaper + python-bidi when available.
-# Default login: admin / 112233 (change before production use).
 
 import os
 import sqlite3
 import uuid
+import shutil
 from datetime import datetime
 
 from kivy.app import App
@@ -34,9 +34,12 @@ except Exception:
     def ar_text(value):
         return str(value)
 
-NAVY = (15/255, 23/255, 42/255, 1)
-PANEL = (30/255, 41/255, 59/255, 1)
-GOLD = (212/255, 175/255, 55/255, 1)
+# الألوان والتصميم الأنيق
+NAVY = (15/255, 23/255, 42/255, 1)          # خلفية داكنة فخمة
+PANEL = (30/255, 41/255, 59/255, 1)         # لوحة فرعية
+GOLD = (212/255, 175/255, 55/255, 1)        # ذهبي أنيق
+GREEN = (46/255, 204/255, 113/255, 1)       # أخضر للدخول والحفظ
+RED = (231/255, 76/255, 60/255, 1)          # أحمر للخروج والرجوع
 WHITE = (1, 1, 1, 1)
 MUTED = (0.75, 0.80, 0.87, 1)
 
@@ -96,7 +99,6 @@ class Store:
                 c.execute("ALTER TABLE sales ADD COLUMN phone TEXT DEFAULT ''")
 
     def add_sale(self, d):
-        # Keep legacy customer column populated for compatibility with older DB versions.
         with self.connect() as c:
             c.execute("""INSERT INTO sales
             (id,no,date,time,customer,owner,phone,size,pay,currency,qty,price,discount,total)
@@ -149,6 +151,8 @@ class Field(TextInput):
             font_size="16sp",
             halign="right",
             foreground_color=NAVY,
+            background_color=(0.95, 0.95, 0.95, 1),
+            cursor_color=GOLD,
             **kwargs
         )
 
@@ -169,29 +173,31 @@ class GoldenPulseApp(App):
             font_name=APP_FONT
         )
 
-    def make_button(self, text, callback, height=48, font_size=16):
+    def make_button(self, text, callback, height=48, font_size=16, bg_color=GOLD, fg_color=NAVY):
         b = Button(text=ar_text(text), size_hint_y=None, height=dp(height),
-                   background_normal="", background_color=GOLD, color=NAVY,
-                   font_size=f"{font_size}sp", font_name=APP_FONT)
+                   background_normal="", background_color=bg_color, color=fg_color,
+                   font_size=f"{font_size}sp", font_name=APP_FONT, bold=True)
         b.bind(on_release=callback)
         return b
 
     def show_login(self):
         self.root_box.clear_widgets()
-        self.root_box.add_widget(self.make_label("بئر علي حسين", 54, GOLD, 27))
+        self.root_box.add_widget(self.make_label("بئر علي حسين", 54, GOLD, 27, markup=True))
         self.root_box.add_widget(self.make_label("GOLDEN PULSE", 36, WHITE, 22))
         self.root_box.add_widget(self.make_label("تسجيل الدخول", 48, GOLD, 20))
+        
         form = BoxLayout(orientation="vertical", spacing=dp(12), padding=(dp(12), dp(12)))
         self.login_user = Field("اسم المستخدم")
         self.login_pass = Field("كلمة المرور", password=True)
         form.add_widget(self.login_user)
         form.add_widget(self.login_pass)
-        form.add_widget(self.make_button("دخول", self.login, 50, 18))
+        
+        # زر الدخول باللون الأخضر المميز
+        form.add_widget(self.make_button("دخول النظام", self.login, 50, 18, bg_color=GREEN, fg_color=NAVY))
         self.root_box.add_widget(form)
-        self.root_box.add_widget(self.make_label("للدخول الأول: admin / 112233", 36, MUTED, 12))
+        self.root_box.add_widget(self.make_label("للدخول الافتراضي: admin / 112233", 36, MUTED, 12))
 
     def login(self, *_):
-        # Initial prototype credentials. Replace with managed credentials before production.
         if self.login_user.text.strip() == "admin" and self.login_pass.text == "112233":
             self.show_dashboard()
         else:
@@ -199,22 +205,31 @@ class GoldenPulseApp(App):
 
     def show_dashboard(self):
         self.root_box.clear_widgets()
-        self.header = self.make_label("بئر علي حسين  |  GOLDEN PULSE", 52, GOLD, 21)
+        self.header = self.make_label("بئر علي حسين  |  لوحة التحكم الذهبية", 52, GOLD, 21)
         self.root_box.add_widget(self.header)
-        self.nav = GridLayout(cols=3, spacing=dp(5), size_hint_y=None, height=dp(100))
+        
+        # القائمة الرئيسية المكونة من الشاشات السبع المطلوبة بألوان جذابة
+        self.nav = GridLayout(cols=2, spacing=dp(8), size_hint_y=None, height=dp(260))
         for label, screen in [
-            ("المبيعات", "sales"), ("سند قبض", "rec"), ("سند صرف", "pay"),
-            ("سداد دين", "debt"), ("التقارير", "reports"), ("السجلات", "records")
+            ("المبيعات", "sales"), 
+            ("سند قبض", "rec"), 
+            ("سند صرف", "pay"),
+            ("الديون وسدادها", "debt"), 
+            ("التقارير المالية", "reports"), 
+            ("السجلات", "records"),
+            ("النسخة الاحتياطية", "backup")
         ]:
-            b = self.make_button(label, lambda inst, s=screen: self.show_screen(s), 46, 14)
+            b = self.make_button(label, lambda inst, s=screen: self.show_screen(s), 48, 15, bg_color=PANEL, fg_color=GOLD)
             self.nav.add_widget(b)
         self.root_box.add_widget(self.nav)
+        
+        # زر خروج أحمر للعودة لتسجيل الدخول أو القفل
+        exit_btn = self.make_button("قفل النظام / تسجيل الخروج", lambda *_: self.show_login(), 48, 15, bg_color=RED, fg_color=WHITE)
+        self.root_box.add_widget(exit_btn)
+        
         self.content = BoxLayout(orientation="vertical", spacing=dp(8))
         self.root_box.add_widget(self.content)
         self.show_screen("sales")
-
-    def add_label(self, parent, text, height=34, color=WHITE, size=15):
-        parent.add_widget(self.make_label(text, height, color, size))
 
     def show_screen(self, name):
         self.content.clear_widgets()
@@ -226,8 +241,10 @@ class GoldenPulseApp(App):
             self.debt_screen()
         elif name == "reports":
             self.reports_screen()
-        else:
+        elif name == "records":
             self.records_screen()
+        elif name == "backup":
+            self.backup_screen()
 
     def form_shell(self, title):
         self.add_label(self.content, title, height=40, color=GOLD, size=20)
@@ -238,6 +255,11 @@ class GoldenPulseApp(App):
         scroll.add_widget(form)
         self.content.add_widget(scroll)
         return form
+
+    def add_back_button(self, form_layout):
+        """زر أحمر للرجوع للوحة التحكم الرئيسية في نهاية كل صفحة"""
+        b = self.make_button("العودة إلى لوحة التحكم الرئيسية", lambda *_: self.show_dashboard(), 48, 15, bg_color=RED, fg_color=WHITE)
+        form_layout.add_widget(b)
 
     def add_field(self, form, hint, key, fields, default=""):
         widget = Field(hint, text=default)
@@ -255,29 +277,32 @@ class GoldenPulseApp(App):
         return w
 
     def save_button(self, form, label, callback):
-        form.add_widget(self.make_button(label, callback, 50, 17))
+        # زر الحفظ باللون الأخضر الجذاب
+        form.add_widget(self.make_button(label, callback, 50, 17, bg_color=GREEN, fg_color=NAVY))
 
     def notify(self, message):
         box = BoxLayout(orientation="vertical", padding=dp(12), spacing=dp(12))
         box.add_widget(self.make_label(message, 70, NAVY, 15))
-        close = self.make_button("حسنًا", lambda *_: pop.dismiss(), 42)
+        close = self.make_button("حسنًا", lambda *_: pop.dismiss(), 42, bg_color=GOLD, fg_color=NAVY)
         box.add_widget(close)
         pop = Popup(title="Golden Pulse", content=box, size_hint=(.88, .42))
         close.bind(on_release=pop.dismiss)
         pop.open()
 
     def sales_screen(self):
-        form = self.form_shell("فاتورة تعبئة مياه")
+        form = self.form_shell("فاتورة تعبئة مياه (وايت)")
         f = {}
         self.add_field(form, "اسم صاحب الوايت", "owner", f)
         self.add_field(form, "رقم الهاتف", "phone", f)
         self.add_spinner(form, [str(x) for x in range(2000, 20001, 2000)], "size", f, "10000")
         self.add_spinner(form, ["نقدي", "آجل"], "pay", f, "نقدي")
         self.add_spinner(form, ["ريال يمني", "دولار", "ريال سعودي"], "currency", f, "ريال يمني")
-        self.add_field(form, "الكمية", "qty", f, "1")
-        self.add_field(form, "سعر الوحدة / التعبئة", "price", f, "0")
+        self.add_field(form, "الكمية (لتر)", "qty", f, "5000")  # الكمية الافتراضية 5000 لتر
+        self.add_field(form, "سعر الوايت", "price", f, "0")
         self.add_field(form, "الخصم", "discount", f, "0")
-        total_label = self.make_label("الإجمالي: 0", 38, GOLD, 18)
+        
+        # الإجمالي بخط كبير ولون ذهبي جذاب
+        total_label = self.make_label("الإجمالي: 0", 44, GOLD, 22)
         form.add_widget(total_label)
 
         def calc(*_):
@@ -310,7 +335,9 @@ class GoldenPulseApp(App):
                 self.show_invoice(data)
             except (ValueError, sqlite3.Error) as e:
                 self.notify(str(e))
+                
         self.save_button(form, "حفظ الفاتورة وعرضها", save)
+        self.add_back_button(form)
 
     def invoice_text(self, d):
         return (
@@ -340,8 +367,8 @@ class GoldenPulseApp(App):
         box.add_widget(inv)
         actions = GridLayout(cols=2, spacing=dp(6), size_hint_y=None, height=dp(48))
         pop = Popup(title="فاتورة بئر علي حسين", content=box, size_hint=(.95, .85))
-        print_btn = self.make_button("طباعة / مشاركة", lambda *_: self.share_invoice(d), 46, 13)
-        close_btn = self.make_button("إغلاق", lambda *_: pop.dismiss(), 46, 13)
+        print_btn = self.make_button("طباعة / مشاركة", lambda *_: self.share_invoice(d), 46, 13, bg_color=GREEN, fg_color=NAVY)
+        close_btn = self.make_button("إغلاق", lambda *_: pop.dismiss(), 46, 13, bg_color=RED, fg_color=WHITE)
         actions.add_widget(print_btn)
         actions.add_widget(close_btn)
         box.add_widget(actions)
@@ -361,9 +388,9 @@ class GoldenPulseApp(App):
             intent.putExtra(Intent.EXTRA_TEXT, String(text))
             chooser = Intent.createChooser(intent, String("طباعة أو مشاركة الفاتورة"))
             activity.startActivity(chooser)
-            self.notify("اختر تطبيق الطباعة أو المشاركة من القائمة التي ظهرت.")
+            self.notify("اختر تطبيق الطابعة الحرارية أو البلوتوث من القائمة.")
         except Exception:
-            self.notify("تعذّر فتح قائمة الطباعة تلقائيًا. يمكنك استخدام مشاركة الفاتورة من نظام أندرويد بعد تفعيل تطبيق الطابعة.")
+            self.notify("تعذّر فتح قائمة المشاركة تلقائيًا.")
 
     def voucher_screen(self, table):
         title = "سند قبض" if table == "rec" else "سند صرف"
@@ -388,10 +415,11 @@ class GoldenPulseApp(App):
                 self.store.add_voucher(table, dict(no=no, date=date, name=name, amount=amount,
                     currency=f["currency"].text, method=f["method"].text, note=f["note"].text.strip()))
                 self.notify(f"تم حفظ {title} رقم {no}")
-                self.show_screen(table)
+                self.show_dashboard()
             except (ValueError, sqlite3.Error) as e:
                 self.notify(str(e))
         self.save_button(form, "حفظ " + title, save)
+        self.add_back_button(form)
 
     def debt_screen(self):
         form = self.form_shell("تسجيل سداد دين عميل")
@@ -416,10 +444,11 @@ class GoldenPulseApp(App):
                     phone=f["phone"].text.strip(), amount=amount, currency=f["currency"].text,
                     method=f["method"].text, note=f["note"].text.strip()))
                 self.notify("تم تسجيل سداد الدين " + no)
-                self.show_screen("debt")
+                self.show_dashboard()
             except (ValueError, sqlite3.Error) as e:
                 self.notify(str(e))
         self.save_button(form, "حفظ سداد الدين", save)
+        self.add_back_button(form)
 
     def reports_screen(self):
         form = self.form_shell("التقارير والملخص")
@@ -431,6 +460,7 @@ class GoldenPulseApp(App):
         self.add_label(form, f"إجمالي سداد الديون المسجل: {money(debt_paid)}", height=42, size=17)
         self.add_label(form, "تنبيه: الإجماليات تجمع العملات معًا؛ لا تستخدمها كرصيد موحد عند تعدد العملات.",
                        height=68, color=MUTED, size=12)
+        self.add_back_button(form)
 
     def records_screen(self):
         form = self.form_shell("آخر السجلات")
@@ -444,6 +474,29 @@ class GoldenPulseApp(App):
                 no = row.get("no", "")
                 date = row.get("date", "")
                 self.add_label(form, f"{date} | {no} | {name} | {money(amount)}", height=44, color=WHITE, size=12)
+        self.add_back_button(form)
+
+    def backup_screen(self):
+        form = self.form_shell("النسخة الاحتياطية المحلية")
+        self.add_label(form, "يمكنك أخذ نسخة احتياطية لقاعدة البيانات المحلية وحفظها على جهازك.", height=50, color=MUTED, size=13)
+        
+        def do_backup(_):
+            try:
+                src = os.path.join(self.user_data_dir, "golden_pulse.db")
+                dst_dir = os.path.join(self.user_data_dir, "backup")
+                os.makedirs(dst_dir, exist_ok=True)
+                dst = os.path.join(dst_dir, f"golden_pulse_bk_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db")
+                if os.path.exists(src):
+                    shutil.copy(src, dst)
+                    self.notify(f"تم إنشاء نسخة احتياطية بنجاح في:\n{dst}")
+                else:
+                    self.notify("لا توجد بيانات حالية لعمل نسخة احتياطية.")
+            except Exception as e:
+                self.notify(f"خطأ في النسخ: {str(e)}")
+
+        bk_btn = self.make_button("إنشاء نسخة احتياطية الآن", do_backup, 48, 16, bg_color=GREEN, fg_color=NAVY)
+        form.add_widget(bk_btn)
+        self.add_back_button(form)
 
 if __name__ == "__main__":
     GoldenPulseApp().run()
